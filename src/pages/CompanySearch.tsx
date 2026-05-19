@@ -32,6 +32,16 @@ import {
   type SavedSearchItem,
 } from '@/services/savedSearches';
 
+function companyWebsiteHref(org: {
+  primary_domain?: string | null;
+  website_url?: string | null;
+}): string | null {
+  const raw = (org.website_url || org.primary_domain || '').trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw.replace(/^\/+/, '')}`;
+}
+
 export function CompanySearchPage() {
   const [form, setForm] = useState<ApolloSearchFormState>(() => getEmptyApolloSearchForm());
   const [saveName, setSaveName] = useState('');
@@ -482,7 +492,23 @@ export function CompanySearchPage() {
                       <td className="px-3 py-2 tabular-nums">
                         {org.founded_year != null ? String(org.founded_year) : '—'}
                       </td>
-                      <td className="px-3 py-2">{org.primary_domain || '—'}</td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const href = companyWebsiteHref(org);
+                          const label = org.primary_domain?.trim() || org.website_url?.trim();
+                          if (!href || !label) return '—';
+                          return (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              {label.replace(/^https?:\/\//i, '').replace(/\/$/, '')}
+                            </a>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-2">
                         {org.phone || org.primary_phone?.sanitized_number || org.primary_phone?.number || '—'}
                       </td>
