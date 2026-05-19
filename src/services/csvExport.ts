@@ -25,7 +25,7 @@ function apolloOrgToCsvRow(org: ApolloOrganizationRow): string[] {
     (org.primary_phone && (org.primary_phone.sanitized_number || org.primary_phone.number)) ||
     '';
   return [
-    org.id,
+    org.apollo_account_id || org.id,
     org.name,
     org.primary_domain,
     org.website_url,

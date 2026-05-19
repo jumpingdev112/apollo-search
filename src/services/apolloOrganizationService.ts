@@ -1,4 +1,9 @@
-import type { ApolloOrganizationFilters, ApolloSearchResponse } from '@/types/apolloSearch';
+import type {
+  ApolloAccountRow,
+  ApolloOrganizationFilters,
+  ApolloOrganizationRow,
+  ApolloSearchResponse,
+} from '@/types/apolloSearch';
 
 const APOLLO_SEARCH_PATH = '/api/v1/mixed_companies/search';
 const DEFAULT_MIN_FOUNDED_YEAR = 1950;
@@ -106,6 +111,93 @@ export function buildApolloSearchQuery(
   return sp;
 }
 
+function asOrgRow(raw: Record<string, unknown>, source: 'organization' | 'account'): ApolloOrganizationRow {
+  const accountId = source === 'account' ? String(raw.id || '') : '';
+  return {
+    id: String(raw.organization_id || raw.id || ''),
+    apollo_account_id: source === 'account' ? accountId || null : null,
+    name: String(raw.name || 'Unknown'),
+    website_url: (raw.website_url as string) || null,
+    primary_domain: (raw.primary_domain as string) || (raw.domain as string) || null,
+    linkedin_url: (raw.linkedin_url as string) || null,
+    twitter_url: (raw.twitter_url as string) || null,
+    facebook_url: (raw.facebook_url as string) || null,
+    phone: (raw.phone as string) || null,
+    primary_phone: (raw.primary_phone as ApolloOrganizationRow['primary_phone']) || null,
+    founded_year: typeof raw.founded_year === 'number' ? raw.founded_year : null,
+    alexa_ranking: typeof raw.alexa_ranking === 'number' ? raw.alexa_ranking : null,
+    source,
+  };
+}
+
+/**
+ * mixed_companies/search returns up to per_page hits split across `organizations` and
+ * `accounts`. `model_ids` is the authoritative ordered list for the page.
+ */
+export function normalizeMixedCompaniesResponse(j: Record<string, unknown>): ApolloSearchResponse {
+  const orgRows = ((j.organizations as Record<string, unknown>[]) || []).map((o) => asOrgRow(o, 'organization'));
+  const accountRows = ((j.accounts as Record<string, unknown>[]) || []).map((a) => asOrgRow(a, 'account'));
+
+  const orgById = new Map(orgRows.map((o) => [o.id, o]));
+  const accountById = new Map(
+    ((j.accounts as ApolloAccountRow[]) || []).map((a) => [String(a.id), asOrgRow(a as unknown as Record<string, unknown>, 'account')])
+  );
+
+  const modelIds = (j.model_ids as string[]) || [];
+  const merged: ApolloOrganizationRow[] = [];
+  const seen = new Set<string>();
+
+  for (const mid of modelIds) {
+    const account = accountById.get(mid);
+    if (account) {
+      const key = `a:${account.apollo_account_id || mid}`;
+      if (!seen.has(key)) {
+        merged.push(account);
+        seen.add(key);
+      }
+      continue;
+    }
+    const org = orgById.get(mid);
+    if (org) {
+      const key = `o:${org.id}`;
+      if (!seen.has(key)) {
+        merged.push(org);
+        seen.add(key);
+      }
+    }
+  }
+
+  if (merged.length === 0) {
+    for (const o of orgRows) merged.push(o);
+    for (const a of accountRows) merged.push(a);
+  } else {
+    for (const o of orgRows) {
+      const key = `o:${o.id}`;
+      if (!seen.has(key)) {
+        merged.push(o);
+        seen.add(key);
+      }
+    }
+    for (const a of accountRows) {
+      const key = `a:${a.apollo_account_id || a.id}`;
+      if (!seen.has(key)) {
+        merged.push(a);
+        seen.add(key);
+      }
+    }
+  }
+
+  return {
+    organizations: merged,
+    pagination: (j.pagination as ApolloSearchResponse['pagination']) || null,
+    breadcrumbs: j.breadcrumbs as unknown[] | undefined,
+    partial_results_only: j.partial_results_only as boolean | undefined,
+    model_ids: modelIds,
+    page_organization_count: orgRows.length,
+    page_account_count: accountRows.length,
+  };
+}
+
 export class ApolloApiError extends Error {
   status: number;
   details?: unknown;
@@ -155,13 +247,7 @@ export async function postApolloOrganizationSearch(
   }
 
   const j = json || {};
-  return {
-    organizations: (j.organizations as ApolloSearchResponse['organizations']) || [],
-    pagination: (j.pagination as ApolloSearchResponse['pagination']) || null,
-    breadcrumbs: j.breadcrumbs as unknown[] | undefined,
-    partial_results_only: j.partial_results_only as boolean | undefined,
-    model_ids: j.model_ids as string[] | undefined,
-  };
+  return normalizeMixedCompaniesResponse(j);
 }
 
 export function parseMinFoundedYear(raw: unknown): number {

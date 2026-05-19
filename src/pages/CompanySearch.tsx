@@ -450,7 +450,11 @@ export function CompanySearchPage() {
         {!searchLoading && searchResult && (
           <>
             <p className="text-sm text-muted-foreground">
-              {totalEntries != null ? `${totalEntries} total matches · page ${page} of ${totalPages}` : `Page ${page}`}
+              {searchResult.organizations.length} on this page
+              {searchResult.page_organization_count != null && searchResult.page_account_count != null
+                ? ` (${searchResult.page_organization_count} orgs, ${searchResult.page_account_count} CRM accounts)`
+                : ''}
+              {totalEntries != null ? ` · ${totalEntries} total matches · page ${page} of ${totalPages}` : ` · page ${page}`}
               {searchResult.partial_results_only ? ' · partial results' : ''}
             </p>
             <div className="overflow-x-auto rounded-lg border">
@@ -458,6 +462,7 @@ export function CompanySearchPage() {
                 <thead>
                   <tr className="border-b bg-muted/50 text-left">
                     <th className="px-3 py-2 font-medium">Name</th>
+                    <th className="px-3 py-2 font-medium">Type</th>
                     <th className="px-3 py-2 font-medium">Founded</th>
                     <th className="px-3 py-2 font-medium">Domain</th>
                     <th className="px-3 py-2 font-medium">Phone</th>
@@ -466,8 +471,14 @@ export function CompanySearchPage() {
                 </thead>
                 <tbody className="divide-y bg-white">
                   {(searchResult.organizations || []).map((org) => (
-                    <tr key={org.id} className="hover:bg-muted/30">
+                    <tr
+                      key={org.apollo_account_id ? `account-${org.apollo_account_id}` : `org-${org.id}`}
+                      className="hover:bg-muted/30"
+                    >
                       <td className="px-3 py-2 font-medium">{org.name}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {org.source === 'account' ? 'CRM account' : 'Organization'}
+                      </td>
                       <td className="px-3 py-2 tabular-nums">
                         {org.founded_year != null ? String(org.founded_year) : '—'}
                       </td>

@@ -70,14 +70,29 @@ export interface ApolloOrganizationRow {
   primary_phone?: { number?: string; sanitized_number?: string } | null;
   founded_year?: number | null;
   alexa_ranking?: number | null;
+  /** Present when row came from Apollo `accounts` (CRM) vs `organizations`. */
+  source?: 'organization' | 'account';
+  /** Apollo account id when `source` is `account` (used for keys / CSV). */
+  apollo_account_id?: string | null;
 }
 
+/** Raw account object from mixed_companies/search (shape overlaps organizations). */
+export type ApolloAccountRow = ApolloOrganizationRow & {
+  domain?: string | null;
+  organization_id?: string | null;
+  modality?: string;
+};
+
 export interface ApolloSearchResponse {
+  /** Merged page rows (organizations + accounts), ordered by `model_ids`. */
   organizations: ApolloOrganizationRow[];
   pagination: ApolloPagination | null;
   breadcrumbs?: unknown[];
   partial_results_only?: boolean;
   model_ids?: string[];
+  /** Counts on this page before merge (for UI hints). */
+  page_organization_count?: number;
+  page_account_count?: number;
 }
 
 export interface CompanySavedSearchItem {
